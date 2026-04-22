@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { GraduationCap, CheckCircle2, Clock, Upload, FileText, Trash2, BookOpen, Award, Loader2 } from 'lucide-react';
-import { defaultSubjects, diplomados, type Subject } from '@/data/curriculum';
+import { GraduationCap, CheckCircle2, Clock, Upload, FileText, Trash2, BookOpen, Loader2 } from 'lucide-react';
+import { defaultSubjects, type Subject } from '@/data/curriculum';
 import { toast } from 'sonner';
 
 const statusConfig = {

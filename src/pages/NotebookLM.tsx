@@ -4,11 +4,10 @@ import { collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc } from
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Brain, Send, Upload, FileText, Trash2, Loader2,
-  Sparkles, BookOpen, Download, Eye, FileAudio, FileVideo,
+  BookOpen, Download, Eye, FileAudio, FileVideo,
   Image as ImageIcon, RefreshCw, X
 } from 'lucide-react';
 import { toast } from 'sonner';
