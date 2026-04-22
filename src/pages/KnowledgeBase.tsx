@@ -11,7 +11,6 @@ export default function KnowledgeBase() {
   const [context, setContext] = useState('');
   const [loading, setLoading] = useState(false);
   const [question, setQuestion] = useState('');
-  const [answer, setAnswer] = useState('');
   const [chatLog, setChatLog] = useState<{q: string, a: string}[]>([]);
 
   useEffect(() => {
@@ -30,7 +29,6 @@ export default function KnowledgeBase() {
     setSelectedFile(file);
     setLoading(true);
     setContext('');
-    setAnswer('');
     setChatLog([]);
     try {
       const blob = await fetchFileContent(file.id);
@@ -64,7 +62,6 @@ export default function KnowledgeBase() {
     setLoading(true);
     try {
       const res = await askGemini(question, context);
-      setAnswer(res);
       setChatLog(prev => [...prev, { q: question, a: res }]);
       setQuestion('');
     } catch (e) {
