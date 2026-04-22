@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { 
-  signInWithPopup, 
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   type User as FirebaseUser
@@ -16,7 +18,6 @@ export interface AppUser {
   isLocal: boolean;
 }
 
-// Predefined local users (passwords hashed conceptually - validated at login time)
 const LOCAL_USERS: Record<string, { password: string; user: AppUser }> = {
   'gilda': {
     password: '123123',
@@ -58,7 +59,7 @@ function firebaseToAppUser(fbUser: FirebaseUser): AppUser {
     displayName: fbUser.displayName || 'Usuario',
     email: fbUser.email || '',
     photoURL: fbUser.photoURL,
-    role: 'user',
+    role: fbUser.email === 'soporte.aiwis@gmail.com' ? 'admin' : 'user',
     isLocal: false,
   };
 }
@@ -68,7 +69,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for saved local session
+    // Check for saved local session first
     const savedUser = localStorage.getItem('estudia_user');
     if (savedUser) {
       try {
@@ -76,10 +77,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (parsed.isLocal) {
           setUser(parsed);
           setLoading(false);
-          return;
         }
       } catch { /* ignore */ }
     }
+
+    // Handle redirect result from Google sign-in
+    getRedirectResult(auth).then((result) => {
+      if (result?.user) {
+        const appUser = firebaseToAppUser(result.user);
+        setUser(appUser);
+        localStorage.setItem('estudia_user', JSON.stringify(appUser));
+      }
+    }).catch((err) => {
+      console.error('Redirect result error:', err);
+    });
 
     const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
       if (fbUser) {
@@ -87,7 +98,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(appUser);
         localStorage.setItem('estudia_user', JSON.stringify(appUser));
       } else {
-        // Only clear if not a local user
         const saved = localStorage.getItem('estudia_user');
         if (saved) {
           try {
@@ -111,20 +121,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signInWithGoogle = async () => {
     try {
+      // Try popup first
       const result = await signInWithPopup(auth, googleProvider);
       const appUser = firebaseToAppUser(result.user);
       setUser(appUser);
       localStorage.setItem('estudia_user', JSON.stringify(appUser));
-    } catch (error: any) {
-      console.error('Google Sign-In Error:', error);
-      throw error;
+    } catch (popupError: any) {
+      console.warn('Popup failed, trying redirect...', popupError);
+      // If popup is blocked, fall back to redirect
+      if (
+        popupError?.code === 'auth/popup-blocked' ||
+        popupError?.code === 'auth/popup-closed-by-user' ||
+        popupError?.code === 'auth/cancelled-popup-request'
+      ) {
+        await signInWithRedirect(auth, googleProvider);
+      } else {
+        throw popupError;
+      }
     }
   };
 
   const signInLocal = async (username: string, password: string) => {
     const entry = LOCAL_USERS[username.toLowerCase()];
     if (!entry) {
-      return { success: false, error: 'Usuario no encontrado' };
+      return { success: false, error: 'Usuario no encontrado. Usa "gilda" o "aiwis".' };
     }
     if (entry.password !== password) {
       return { success: false, error: 'Contraseña incorrecta' };

@@ -23,10 +23,21 @@ export const LoginPage = () => {
     setGoogleLoading(true);
     try {
       await signInWithGoogle();
+      // If we get here, popup worked - navigate
       navigate('/');
     } catch (err: any) {
       console.error('Google login error:', err);
-      setError('Error al conectar con Google. Usa un usuario predeterminado por ahora.');
+      // If the error is about redirect, the page will reload - don't show error
+      if (err?.code === 'auth/popup-blocked' || err?.code === 'auth/cancelled-popup-request') {
+        // Redirect flow initiated, page will reload
+        return;
+      }
+      const msg = err?.code === 'auth/unauthorized-domain' 
+        ? 'Dominio no autorizado en Firebase. Usa un usuario predeterminado.'
+        : err?.code === 'auth/popup-closed-by-user'
+        ? 'Ventana cerrada. Intenta de nuevo.'
+        : `Error Google (${err?.code || 'unknown'}). Usa un usuario predeterminado.`;
+      setError(msg);
     } finally {
       setGoogleLoading(false);
     }
