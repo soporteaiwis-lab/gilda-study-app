@@ -1,56 +1,43 @@
-import { google } from 'googleapis';
+declare var process: any;
+
+interface DriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  modifiedTime: string;
+  size?: string;
+  webViewLink?: string;
+  webContentLink?: string;
+  iconLink?: string;
+  thumbnailLink?: string;
+}
 
 export default async function handler(req: any, res: any) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  // CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const apiKey = process.env.VITE_FIREBASE_API_KEY || process.env.VITE_GOOGLE_API_KEY;
+  const folderId = req.query.folderId || process.env.VITE_DRIVE_FOLDER_ID || '1HmB4SVm7WraN-4ELBxaEm3RcTjZ9t8Vq';
+
+  if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
 
   try {
-    const { action, accessToken, folderId, fileData, fileName, mimeType, parentId } = req.body;
+    const query = `'${folderId}' in parents and trashed=false`;
+    const fields = 'files(id,name,mimeType,modifiedTime,size,webViewLink,webContentLink,iconLink,thumbnailLink)';
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=${encodeURIComponent(fields)}&key=${apiKey}&orderBy=folder,name&pageSize=100`;
 
-    if (!accessToken) {
-      return res.status(401).json({ error: 'Unauthorized: No access token provided' });
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.error) {
+      return res.status(data.error.code || 500).json({ error: data.error.message });
     }
 
-    const oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials({ access_token: accessToken });
-    const drive = google.drive({ version: 'v3', auth: oauth2Client });
-
-    switch (action) {
-      case 'listFiles': {
-        const query = folderId 
-          ? \`'\${folderId}' in parents and trashed = false\`
-          : \`'root' in parents and trashed = false\`;
-        
-        const response = await drive.files.list({
-          q: query,
-          fields: 'files(id, name, mimeType, size, modifiedTime, thumbnailLink)',
-          orderBy: 'folder,name',
-        });
-        
-        return res.status(200).json({ files: response.data.files || [] });
-      }
-
-      case 'createFolder': {
-        const fileMetadata = {
-          name: fileName,
-          mimeType: 'application/vnd.google-apps.folder',
-          parents: parentId ? [parentId] : undefined,
-        };
-        
-        const response = await drive.files.create({
-          requestBody: fileMetadata,
-          fields: 'id, name',
-        });
-        
-        return res.status(200).json(response.data);
-      }
-
-      default:
-        return res.status(400).json({ error: 'Invalid action' });
-    }
-  } catch (error) {
-    console.error('Drive API Error:', error);
-    return res.status(500).json({ error: 'Failed to execute Drive operation' });
+    return res.status(200).json({ files: data.files || [] });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to fetch files' });
   }
 }

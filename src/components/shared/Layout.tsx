@@ -13,7 +13,7 @@ import {
   Menu,
   X,
   Database,
-  Notebook,
+  Brain,
   Shield
 } from 'lucide-react';
 
@@ -32,7 +32,7 @@ export const Layout = () => {
     { icon: LayoutDashboard, label: 'Inicio', path: '/' },
     { icon: MessageSquare, label: 'Chat IA', path: '/chat' },
     { icon: FolderOpen, label: 'Google Drive', path: '/materials' },
-    { icon: Notebook, label: 'NotebookLM', path: '/notebook' },
+    { icon: Brain, label: 'Conocimiento', path: '/notebook' },
     { icon: BookOpen, label: 'Currículo', path: '/curriculum' },
     { icon: CheckSquare, label: 'Tareas', path: '/tasks' },
     { icon: Settings, label: 'Configuración', path: '/settings' },
