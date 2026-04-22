@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import * as process from 'process';
+declare var process: any;
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
