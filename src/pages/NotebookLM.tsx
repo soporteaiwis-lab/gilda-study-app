@@ -42,6 +42,9 @@ export const NotebookLM = () => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Source));
       setSources(data);
+    }, (error) => {
+      console.error("Firestore Error:", error);
+      toast.error('Error al cargar las fuentes.');
     });
     return () => unsubscribe();
   }, []);

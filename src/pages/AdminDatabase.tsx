@@ -13,11 +13,16 @@ import { toast } from 'sonner';
 export const AdminDatabase = () => {
   const { user, isAdmin } = useAuth();
   const [activeTable, setActiveTable] = useState('tasks');
-  const [tables, setTables] = useState<Record<string, any[]>>({
-    tasks: [],
-    sources: [],
-    curriculum: []
-  });
+  const collections = [
+    { id: 'tasks', name: 'Tasks' },
+    { id: 'sources', name: 'Sources' },
+    { id: 'curriculum', name: 'Curriculum' },
+    { id: 'settings', name: 'Settings' },
+    { id: 'users', name: 'Users' }
+  ];
+  const [tables, setTables] = useState<Record<string, any[]>>(
+    collections.reduce((acc, col) => ({ ...acc, [col.id]: [] }), {})
+  );
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<any>(null);
@@ -27,15 +32,19 @@ export const AdminDatabase = () => {
 
   useEffect(() => {
     setLoading(true);
-    const collections = ['tasks', 'sources', 'curriculum'];
-    const unsubscribes = collections.map(colName => {
+    const colsToFetch = collections.map(c => c.id);
+    const unsubscribes = colsToFetch.map(colName => {
       return onSnapshot(collection(db, colName), (snapshot) => {
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setTables(prev => ({ ...prev, [colName]: data }));
+        setLoading(false);
+      }, (error) => {
+        console.error(`Firestore Error in ${colName}:`, error);
+        toast.error(`Error al cargar la colección ${colName}`);
+        setLoading(false);
       });
     });
 
-    setLoading(false);
     return () => unsubscribes.forEach(unsub => unsub());
   }, []);
 

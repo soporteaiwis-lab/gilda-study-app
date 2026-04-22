@@ -38,6 +38,10 @@ export const Tasks = () => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
       setTasks(data);
       setLoading(false);
+    }, (error) => {
+      console.error("Firestore Error:", error);
+      toast.error('Error al conectar con la base de datos de tareas. Revisa los permisos.');
+      setLoading(false);
     });
     return () => unsubscribe();
   }, []);

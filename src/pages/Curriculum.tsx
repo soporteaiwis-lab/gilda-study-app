@@ -42,6 +42,10 @@ export const Curriculum = () => {
         setSubjects(data.sort((a, b) => a.id.localeCompare(b.id)));
       }
       setLoading(false);
+    }, (error) => {
+      console.error("Firestore Error in Curriculum:", error);
+      toast.error('Error al cargar la malla curricular.');
+      setLoading(false);
     });
 
     // Also get metadata (PDF)
