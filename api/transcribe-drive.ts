@@ -1,5 +1,7 @@
 import { google } from 'googleapis';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import * as pdfParse from 'pdf-parse';
+import * as mammoth from 'mammoth';
 
 export default async function handler(req: any, res: any) {
   // CORS
@@ -29,24 +31,50 @@ export default async function handler(req: any, res: any) {
       const exportRes = await drive.files.export({ fileId, mimeType: exportMime });
       textContent = typeof exportRes.data === 'string' ? exportRes.data : JSON.stringify(exportRes.data);
     } else {
-      // 3. For binary files (PDF, Images, etc), we need to get the media and send to Gemini
+      // 3. For binary files (PDF, Images, etc), we need to get the media
       const mediaRes = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
       const buffer = Buffer.from(mediaRes.data as ArrayBuffer);
-      const base64 = buffer.toString('base64');
 
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      
-      const result = await model.generateContent([
-        `Digitaliza y transcribe este archivo llamado "${name}" para estudio.`,
-        {
-          inlineData: {
-            data: base64,
-            mimeType: mimeType || 'application/octet-stream'
-          }
+      // FAST PATH: Direct text extraction
+      if (mimeType === 'application/pdf') {
+        try {
+          const data = await pdfParse.default(buffer);
+          textContent = data.text;
+        } catch (err) {
+          console.warn('Fast PDF parse failed, falling back to Gemini:', err);
         }
-      ]);
-      textContent = result.response.text();
+      } else if (mimeType?.includes('wordprocessingml') || mimeType?.includes('msword')) {
+        try {
+          const result = await mammoth.extractRawText({ buffer });
+          textContent = result.value;
+        } catch (err) {
+          console.warn('Fast Word parse failed, falling back to Gemini:', err);
+        }
+      } else if (mimeType?.startsWith('text/')) {
+        textContent = buffer.toString('utf-8');
+      }
+
+      // SLOW PATH: If fast path failed or didn't apply (images/audio/video)
+      if (!textContent.trim()) {
+        const base64 = buffer.toString('base64');
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        
+        let prompt = `Digitaliza y transcribe este archivo llamado "${name}" para estudio.`;
+        if (mimeType?.startsWith('image/')) prompt = 'Transcribe todo el texto de esta imagen.';
+        else if (mimeType?.startsWith('audio/')) prompt = 'Transcribe el audio completamente.';
+        
+        const result = await model.generateContent([
+          prompt,
+          {
+            inlineData: {
+              data: base64,
+              mimeType: mimeType || 'application/octet-stream'
+            }
+          }
+        ]);
+        textContent = result.response.text();
+      }
     }
 
     return res.status(200).json({ text: textContent });

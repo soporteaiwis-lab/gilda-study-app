@@ -1,4 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import * as pdfParse from 'pdf-parse';
+import * as mammoth from 'mammoth';
 
 export default async function handler(req: any, res: any) {
   // CORS
@@ -12,12 +14,35 @@ export default async function handler(req: any, res: any) {
     const { fileBase64, mimeType, fileName } = req.body;
     if (!fileBase64) return res.status(400).json({ error: 'File data is required' });
 
-    // Use Gemini API Key from environment
+    const buffer = Buffer.from(fileBase64, 'base64');
+    let text = '';
+
+    // FAST PATH: Direct text extraction for documents
+    if (mimeType === 'application/pdf') {
+      try {
+        const data = await pdfParse.default(buffer);
+        text = data.text;
+        if (text.trim()) return res.status(200).json({ text: text.trim() });
+      } catch (err) {
+        console.warn('Fast PDF parse failed, falling back to Gemini:', err);
+      }
+    } else if (mimeType.includes('wordprocessingml') || mimeType.includes('msword')) {
+      try {
+        const result = await mammoth.extractRawText({ buffer });
+        text = result.value;
+        if (text.trim()) return res.status(200).json({ text: text.trim() });
+      } catch (err) {
+        console.warn('Fast Word parse failed, falling back to Gemini:', err);
+      }
+    } else if (mimeType.startsWith('text/')) {
+      return res.status(200).json({ text: buffer.toString('utf-8') });
+    }
+
+    // SLOW PATH: Use Gemini API for Images, Audio, Video, or fallback
     const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
     if (!apiKey) return res.status(500).json({ error: 'Gemini API Key not configured in environment' });
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Use 1.5 Flash for speed and large context
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     let prompt = '';
@@ -27,10 +52,8 @@ export default async function handler(req: any, res: any) {
       prompt = 'Transcribe el audio de forma completa y profesional. Divide por temas si es una clase.';
     } else if (mimeType.startsWith('video/')) {
       prompt = 'Resume el video y transcribe los diálogos más importantes para el estudio.';
-    } else if (mimeType === 'application/pdf' || mimeType.includes('document')) {
-      prompt = 'Digitaliza este documento extrayendo TODO el texto de forma fiel. No omitas detalles importantes.';
     } else {
-      prompt = 'Extrae el contenido de este archivo para integrarlo en una base de conocimientos RAG.';
+      prompt = 'Digitaliza este documento extrayendo TODO el texto de forma fiel. No omitas detalles importantes.';
     }
 
     // Safety check for base64 size (approx 20MB limit for inlineData)
@@ -49,7 +72,7 @@ export default async function handler(req: any, res: any) {
     ]);
 
     const response = await result.response;
-    const text = response.text();
+    text = response.text();
 
     if (!text) throw new Error('La IA no devolvió ningún texto.');
 
