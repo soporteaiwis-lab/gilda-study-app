@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FolderOpen, File, FileText, Image, Music, Video, ExternalLink, RefreshCw, Upload, ArrowLeft, Loader2, Brain, Sparkles } from 'lucide-react';
+import { FolderOpen, File, FileText, Image, Music, Video, ExternalLink, RefreshCw, Upload, ArrowLeft, Loader2, Brain } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { toast } from 'sonner';
@@ -67,7 +67,6 @@ export const Materials = () => {
         setError(data.error);
         setFiles([]);
       } else {
-        // Sort: folders first, then files
         const sorted = (data.files || []).sort((a: DriveFile, b: DriveFile) => {
           const aFolder = a.mimeType.includes('folder') ? 0 : 1;
           const bFolder = b.mimeType.includes('folder') ? 0 : 1;
@@ -107,7 +106,6 @@ export const Materials = () => {
     const toastId = toast.loading(`Importando ${file.name}...`);
     
     try {
-      // 1. Create source entry in Firestore
       const sourceRef = await addDoc(collection(db, 'sources'), {
         name: file.name,
         type: file.mimeType,
@@ -117,16 +115,8 @@ export const Materials = () => {
         createdAt: new Date().toISOString(),
       });
 
-      // 2. We can't fetch the content directly from client due to CORS on webContentLink
-      // but we can pass the link to our serverless function if it's public or has key
-      // For now, we'll suggest the user to use the "Conocimiento" upload for local files
-      // but I'll try to use the drive API on server side to fetch content
-      
       toast.info('Archivo enlazado. Iniciando digitalización...', { id: toastId });
       
-      // Call a specialized server action or just let the user know they should download and upload
-      // if CORS is an issue.
-      // Better yet: try to fetch it via our proxy api
       const fetchRes = await fetch(`/api/transcribe-drive?fileId=${file.id}`);
       if (!fetchRes.ok) throw new Error('Error al obtener contenido del archivo');
       const data = await fetchRes.json();
@@ -144,7 +134,6 @@ export const Materials = () => {
 
   return (
     <div className="space-y-5 max-w-6xl mx-auto">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.2)' }}>
@@ -168,7 +157,6 @@ export const Materials = () => {
         </div>
       </div>
 
-      {/* Breadcrumbs */}
       <div className="flex items-center gap-1 text-sm flex-wrap">
         {folderStack.length > 1 && (
           <Button size="sm" variant="ghost" className="text-slate-400 h-7 px-2" onClick={goBack}>
@@ -186,7 +174,6 @@ export const Materials = () => {
         ))}
       </div>
 
-      {/* Content */}
       <Card className="border-0 overflow-hidden" style={{ background: 'rgba(30,41,59,0.6)', border: '1px solid rgba(148,163,184,0.1)' }}>
         {loading ? (
           <div className="p-12 text-center">

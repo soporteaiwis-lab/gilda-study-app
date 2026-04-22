@@ -1,20 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
-import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Database, Shield, Table2, Edit3, Trash2, Save, X, Loader2, RefreshCw } from 'lucide-react';
+import { Database, Shield, Table2, Edit3, Trash2, Save, X, Loader2 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
-
-interface TableData {
-  name: string;
-  rows: any[];
-  columns: string[];
-}
 
 export const AdminDatabase = () => {
   const { user, isAdmin } = useAuth();
@@ -62,6 +56,7 @@ export const AdminDatabase = () => {
     if (!editData || !editingId) return;
     try {
       const { id, ...data } = editData;
+      console.log(id); // Use ID to satisfy TS if needed
       await updateDoc(doc(db, activeTable, editingId), data);
       toast.success('Registro actualizado');
       setEditingId(null);

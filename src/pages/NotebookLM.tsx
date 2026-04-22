@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc, orderBy } from 'firebase/firestore';
 import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
 import {
   Brain, Send, Upload, FileText, Trash2, Loader2,
   BookOpen, Download, Eye, FileAudio, FileVideo,
@@ -12,82 +11,61 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface Source {
-  id: string;
-  name: string;
-  content: string;
-  type: string;
-  status: 'pending' | 'processing' | 'ready' | 'error';
-  selected: boolean;
-}
-
 interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
 
-export const NotebookPage = () => {
+interface Source {
+  id: string;
+  name: string;
+  type: string;
+  content: string;
+  selected: boolean;
+  status: 'ready' | 'processing' | 'error';
+  createdAt: string;
+}
+
+export const NotebookLM = () => {
   const [sources, setSources] = useState<Source[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([
+    { role: 'assistant', content: '¡Hola, Gilda! Soy tu cerebro digital. Sube tus documentos de estudio (PDF, Word, Audios, etc.) y podré ayudarte a resumirlos o responder dudas sobre ellos.' }
+  ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [previewSource, setPreviewSource] = useState<Source | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const chatRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Firestore Sync
   useEffect(() => {
-    const q = query(collection(db, 'sources'));
+    const q = query(collection(db, 'sources'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Source));
+      const data = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Source));
       setSources(data);
     });
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' });
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    for (const file of Array.from(files)) {
-      const newSource = {
+    const toastId = toast.loading(`Digitalizando ${file.name}...`);
+    
+    try {
+      const sourceRef = await addDoc(collection(db, 'sources'), {
         name: file.name,
         type: file.type,
         content: '',
-        status: 'pending' as const,
+        status: 'processing',
         selected: true,
         createdAt: new Date().toISOString(),
-      };
+      });
 
-      try {
-        const docRef = await addDoc(collection(db, 'sources'), newSource);
-        processFile(file, docRef.id);
-      } catch (err) {
-        toast.error(`Error al subir ${file.name}`);
-      }
-    }
-    if (fileRef.current) fileRef.current.value = '';
-  };
-
-  const processFile = async (file: File, docId: string) => {
-    await updateDoc(doc(db, 'sources', docId), { status: 'processing' });
-
-    try {
-      // For text files, read directly
-      if (file.type === 'text/plain' || file.type === 'application/json') {
-        const text = await file.text();
-        await updateDoc(doc(db, 'sources', docId), {
-          content: text,
-          status: 'ready'
-        });
-        return;
-      }
-
-      // For others, use Gemini Transcription
       const reader = new FileReader();
       reader.onload = async () => {
         const base64 = (reader.result as string).split(',')[1];
@@ -99,31 +77,32 @@ export const NotebookPage = () => {
               fileBase64: base64,
               mimeType: file.type,
               fileName: file.name
-            })
+            }),
           });
 
-          if (!res.ok) throw new Error('Transcription failed');
+          if (!res.ok) throw new Error('Error en digitalización');
           const data = await res.json();
 
-          await updateDoc(doc(db, 'sources', docId), {
+          await updateDoc(doc(db, 'sources', sourceRef.id), {
             content: data.text,
             status: 'ready'
           });
-          toast.success(`${file.name} procesado con éxito`);
-        } catch (err) {
-          await updateDoc(doc(db, 'sources', docId), { status: 'error' });
-          toast.error(`Error procesando ${file.name}`);
+          toast.success(`${file.name} listo para estudio`, { id: toastId });
+        } catch (err: any) {
+          await updateDoc(doc(db, 'sources', sourceRef.id), { status: 'error' });
+          toast.error(`Error: ${err.message}`, { id: toastId });
         }
       };
       reader.readAsDataURL(file);
     } catch (err) {
-      await updateDoc(doc(db, 'sources', docId), { status: 'error' });
+      toast.error('Error al subir archivo');
     }
   };
 
   const removeSource = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'sources', id));
+      toast.success('Fuente eliminada');
     } catch (err) {
       toast.error('Error al eliminar');
     }
@@ -161,10 +140,8 @@ export const NotebookPage = () => {
     }
   };
 
-  const retryDigitalization = async (source: Source) => {
-    // We need the original file object, but we don't have it here. 
-    // Usually the user should re-upload, but we can give a better error message.
-    toast.info('Para re-intentar, por favor vuelve a subir el archivo.');
+  const retryDigitalization = (source: Source) => {
+    toast.info(`Para re-intentar digitalizar "${source.name}", por favor vuelve a subir el archivo.`);
   };
 
   const sendMessage = async () => {
@@ -174,186 +151,168 @@ export const NotebookPage = () => {
     setInput('');
     setLoading(true);
 
-    try {
-      const context = sources
-        .filter(s => s.selected && s.status === 'ready')
-        .map(s => `--- FUENTE: ${s.name} ---\n${s.content}`)
-        .join('\n\n');
+    const selectedSources = sources.filter(s => s.selected && s.content);
+    const context = selectedSources.map(s => `[${s.name}]: ${s.content}`).join('\n\n');
 
+    try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: input,
-          context: context || undefined,
+          context: context || undefined
         }),
       });
 
-      if (!res.ok) throw new Error('Error en el servidor');
+      if (!res.ok) throw new Error('Error en la respuesta de IA');
       const data = await res.json();
       setMessages(prev => [...prev, { role: 'assistant', content: data.text }]);
-    } catch (err: any) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `❌ Error: ${err.message}` }]);
+    } catch (err) {
+      toast.error('Error al conectar con el cerebro digital');
     } finally {
       setLoading(false);
     }
   };
 
-  const downloadTxt = (source: Source) => {
-    const blob = new Blob([source.content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${source.name}_transcripcion.txt`;
-    a.click();
-  };
-
   const getFileIcon = (type: string) => {
-    if (type.startsWith('image/')) return <ImageIcon className="w-5 h-5 text-emerald-400" />;
-    if (type.startsWith('audio/')) return <FileAudio className="w-5 h-5 text-blue-400" />;
-    if (type.startsWith('video/')) return <FileVideo className="w-5 h-5 text-purple-400" />;
-    return <FileText className="w-5 h-5 text-amber-400" />;
+    if (type.includes('pdf')) return <FileText className="w-5 h-5 text-red-400" />;
+    if (type.includes('image')) return <ImageIcon className="w-5 h-5 text-pink-400" />;
+    if (type.includes('audio')) return <FileAudio className="w-5 h-5 text-purple-400" />;
+    if (type.includes('video')) return <FileVideo className="w-5 h-5 text-blue-400" />;
+    return <BookOpen className="w-5 h-5 text-emerald-400" />;
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] max-w-6xl mx-auto gap-4">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
-
-        {/* Sidebar: Fuentes */}
-        <div className="lg:col-span-1 flex flex-col gap-3 min-h-0">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-amber-400" /> Fuentes
-            </h2>
-            <Button size="sm" variant="outline" className="border-slate-700 h-8" onClick={() => fileRef.current?.click()}>
-              <Upload className="w-3 h-3 mr-2" /> Subir
-            </Button>
-            <input ref={fileRef} type="file" multiple onChange={handleFileUpload} className="hidden" />
-          </div>
-
-          <Card className="flex-1 bg-slate-900/40 border-slate-800 overflow-y-auto p-2 space-y-2">
-            {sources.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center text-center p-4 opacity-40">
-                <Upload className="w-8 h-8 mb-2" />
-                <p className="text-xs">Sube archivos para comenzar el análisis RAG</p>
-              </div>
-            )}
-            {sources.map(s => (
-              <div key={s.id} className={`group relative p-3 rounded-xl border transition-all ${s.selected ? 'bg-amber-500/5 border-amber-500/20' : 'bg-slate-800/40 border-slate-700/50'}`}>
-                <div className="flex items-start gap-3">
-                  <Checkbox checked={s.selected} onCheckedChange={() => toggleSelect(s.id, s.selected)} className="mt-1 border-slate-600" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      {getFileIcon(s.type)}
-                      <p className="text-xs font-medium text-slate-200 truncate">{s.name}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {s.status === 'processing' ? (
-                        <span className="flex items-center gap-1 text-[10px] text-amber-400"><RefreshCw className="w-3 h-3 animate-spin" /> Procesando...</span>
-                      ) : s.status === 'ready' ? (
-                        <span className="text-[10px] text-emerald-400 font-medium">Digitalizado</span>
-                      ) : s.status === 'error' ? (
-                        <span className="text-[10px] text-red-400">Error</span>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button size="icon" variant="ghost" title="Resumir" className="h-7 w-7 text-amber-400 hover:text-white" onClick={() => summarizeSource(s)}>
-                    <Sparkles className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button size="icon" variant="ghost" title="Ver Contenido" className="h-7 w-7 text-slate-400 hover:text-white" onClick={() => setPreviewSource(s)}>
-                    <Eye className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button size="icon" variant="ghost" title="Eliminar" className="h-7 w-7 text-slate-400 hover:text-red-400" onClick={() => removeSource(s.id)}>
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </Card>
+    <div className="flex h-[calc(100vh-8rem)] gap-4 overflow-hidden">
+      {/* Sidebar - Fuentes */}
+      <Card className="w-80 flex flex-col border-0 bg-slate-900/40 border-slate-800" style={{ border: '1px solid rgba(148, 163, 184, 0.1)' }}>
+        <div className="p-4 border-b border-slate-800/50 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-white flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-purple-400" /> Fuentes
+          </h2>
+          <Button size="icon" variant="ghost" className="h-7 w-7 text-purple-400 hover:bg-purple-500/10" onClick={() => fileInputRef.current?.click()}>
+            <Upload className="w-4 h-4" />
+          </Button>
+          <input ref={fileInputRef} type="file" className="hidden" onChange={handleUpload} />
         </div>
 
-        {/* Main: Chat & Preview */}
-        <div className="lg:col-span-2 flex flex-col gap-4 min-h-0">
-          <Card className="flex-1 bg-slate-900/60 border-slate-800 flex flex-col overflow-hidden">
-            {/* Chat Messages */}
-            <div ref={chatRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.length === 0 && (
-                <div className="h-full flex flex-col items-center justify-center text-center max-w-sm mx-auto">
-                  <Brain className="w-12 h-12 text-amber-400/20 mb-4" />
-                  <h3 className="text-lg font-semibold text-white mb-2">Asistente de Conocimiento</h3>
-                  <p className="text-sm text-slate-500">Selecciona tus fuentes y pregunta cualquier cosa. La IA responderá basada en el contenido digitalizado.</p>
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          {sources.length === 0 && (
+            <div className="text-center py-10 opacity-40">
+              <Upload className="w-8 h-8 mx-auto mb-2" />
+              <p className="text-xs">Sin documentos</p>
+            </div>
+          )}
+          {sources.map(s => (
+            <div key={s.id} className={`group relative p-3 rounded-xl border transition-all cursor-pointer ${s.selected ? 'bg-purple-500/10 border-purple-500/30' : 'bg-slate-800/30 border-slate-700/50 hover:border-slate-600'}`} onClick={() => toggleSelect(s.id, s.selected)}>
+              <div className="flex items-start gap-3">
+                <div className="mt-1">{s.status === 'processing' ? <Loader2 className="w-5 h-5 text-purple-500 animate-spin" /> : getFileIcon(s.type)}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-slate-200 truncate pr-6">{s.name}</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">{s.status === 'ready' ? 'Listo para consultar' : s.status === 'error' ? 'Error al digitalizar' : 'Digitalizando...'}</p>
                 </div>
-              )}
-              {messages.map((msg, i) => (
-                <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm ${
-                    msg.role === 'user' ? 'bg-amber-600 text-white rounded-br-none' : 'bg-slate-800 text-slate-200 rounded-bl-none border border-slate-700/50'
-                  }`}>
-                    {msg.content}
+              </div>
+
+              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {s.status === 'error' && (
+                  <Button size="icon" variant="ghost" title="Reintentar" className="h-7 w-7 text-red-400 hover:text-white" onClick={(e) => { e.stopPropagation(); retryDigitalization(s); }}>
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+                {s.status === 'ready' && (
+                  <>
+                    <Button size="icon" variant="ghost" title="Resumir" className="h-7 w-7 text-amber-400 hover:text-white" onClick={(e) => { e.stopPropagation(); summarizeSource(s); }}>
+                      <Sparkles className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button size="icon" variant="ghost" title="Ver Contenido" className="h-7 w-7 text-slate-400 hover:text-white" onClick={(e) => { e.stopPropagation(); setPreviewSource(s); }}>
+                      <Eye className="w-3.5 h-3.5" />
+                    </Button>
+                  </>
+                )}
+                <Button size="icon" variant="ghost" title="Eliminar" className="h-7 w-7 text-slate-400 hover:text-red-400" onClick={(e) => { e.stopPropagation(); removeSource(s.id); }}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+        {previewSource ? (
+          <Card className="flex-1 flex flex-col border-0 bg-slate-900/40 border-slate-800 overflow-hidden">
+            <div className="p-4 border-b border-slate-800/50 flex items-center justify-between bg-slate-900/60">
+              <div className="flex items-center gap-3">
+                {getFileIcon(previewSource.type)}
+                <h3 className="text-sm font-bold text-white truncate max-w-md">{previewSource.name}</h3>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="h-8 border-slate-700 text-slate-300" onClick={() => {
+                  const blob = new Blob([previewSource.content], { type: 'text/plain' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `${previewSource.name}_transcripcion.txt`;
+                  a.click();
+                }}>
+                  <Download className="w-4 h-4 mr-2" /> Descargar TXT
+                </Button>
+                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setPreviewSource(null)}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="max-w-3xl mx-auto space-y-4">
+                <h1 className="text-2xl font-bold text-white">Previsualización de Texto</h1>
+                <div className="prose prose-invert max-w-none">
+                  <div className="text-slate-300 leading-relaxed whitespace-pre-wrap font-mono text-sm bg-slate-950/50 p-6 rounded-2xl border border-slate-800">
+                    {previewSource.content || 'Este documento no tiene contenido digitalizado aún.'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        ) : (
+          <Card className="flex-1 flex flex-col border-0 bg-slate-900/40 border-slate-800 overflow-hidden" style={{ border: '1px solid rgba(148, 163, 184, 0.1)' }}>
+            <div className="p-4 border-b border-slate-800/50 bg-slate-900/60 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                <Brain className="w-4 h-4 text-purple-400" />
+              </div>
+              <h3 className="text-sm font-bold text-white">Chat de Conocimiento</h3>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.map((m, i) => (
+                <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${m.role === 'user' ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700/50'}`}>
+                    <div className="whitespace-pre-wrap">{m.content}</div>
                   </div>
                 </div>
               ))}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="bg-slate-800 rounded-2xl rounded-bl-none px-4 py-2.5 border border-slate-700/50">
-                    <Loader2 className="w-5 h-5 text-amber-400 animate-spin" />
+                  <div className="bg-slate-800 p-3 rounded-2xl rounded-tl-none border border-slate-700/50">
+                    <Loader2 className="w-4 h-4 text-purple-500 animate-spin" />
                   </div>
                 </div>
               )}
+              <div ref={chatEndRef} />
             </div>
 
-            {/* Input */}
-            <div className="p-3 border-t border-slate-800 bg-slate-900/40">
-              <div className="flex gap-2">
-                <Input
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && sendMessage()}
-                  placeholder="Pregunta sobre las fuentes seleccionadas..."
-                  className="bg-slate-800/50 border-slate-700 text-white"
-                />
-                <Button onClick={sendMessage} disabled={loading || !input.trim()} className="bg-amber-600 hover:bg-amber-700">
-                  <Send className="w-4 h-4" />
+            <div className="p-4 border-t border-slate-800/50 bg-slate-900/60">
+              <div className="flex gap-2 max-w-4xl mx-auto">
+                <Input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} placeholder={sources.some(s => s.selected && s.status === 'ready') ? "Haz una pregunta sobre tus documentos..." : "Selecciona una fuente para chatear..."} className="bg-slate-950 border-slate-700 text-white focus:ring-purple-500" disabled={loading} />
+                <Button onClick={sendMessage} disabled={loading || !input.trim()} style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)' }}>
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 </Button>
               </div>
+              <p className="text-[10px] text-center text-slate-600 mt-2">La IA puede cometer errores. Verifica la información importante.</p>
             </div>
           </Card>
-        </div>
+        )}
       </div>
-
-      {/* Preview Modal */}
-      {previewSource && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <Card className="w-full max-w-3xl max-h-[80vh] flex flex-col bg-slate-900 border-slate-800">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {getFileIcon(previewSource.type)}
-                <div>
-                  <h3 className="text-white font-semibold text-sm">{previewSource.name}</h3>
-                  <p className="text-[10px] text-slate-500">Vista previa del contenido digitalizado</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" className="h-8 border-slate-700 text-slate-300" onClick={() => downloadTxt(previewSource)}>
-                  <Download className="w-3.5 h-3.5 mr-2" /> Bajar .txt
-                </Button>
-                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400" onClick={() => setPreviewSource(null)}>
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-950/50">
-              <pre className="text-sm text-slate-300 whitespace-pre-wrap font-sans leading-relaxed">
-                {previewSource.status === 'ready' ? previewSource.content : 'Procesando contenido...'}
-                {previewSource.status === 'error' && 'Hubo un error al procesar este archivo.'}
-              </pre>
-            </div>
-          </Card>
-        </div>
-      )}
     </div>
   );
 };

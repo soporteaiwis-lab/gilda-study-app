@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { Layout } from '@/components/shared/Layout';
 import { Dashboard } from '@/pages/Dashboard';
-import { NotebookPage } from '@/pages/NotebookLM';
+import { NotebookLM } from '@/pages/NotebookLM';
 import { Curriculum } from '@/pages/Curriculum';
 import { Tasks } from '@/pages/Tasks';
 import { Settings } from '@/pages/Settings';
@@ -16,7 +16,7 @@ function App() {
         <Routes>
           <Route element={<Layout />}>
             <Route index element={<Dashboard />} />
-            <Route path="/notebook" element={<NotebookPage />} />
+            <Route path="/notebook" element={<NotebookLM />} />
             <Route path="/curriculum" element={<Curriculum />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/settings" element={<Settings />} />
