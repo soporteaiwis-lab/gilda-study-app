@@ -6,8 +6,9 @@ export const fetchDriveFiles = async (folderId: string) => {
     if (!response.ok) throw new Error('Error fetching files from Drive');
     const data = await response.json();
     return data.files;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in fetchDriveFiles:', error);
+    if (error.message) alert("Error cargando Drive: " + error.message);
     return [];
   }
 };

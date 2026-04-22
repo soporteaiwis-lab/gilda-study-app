@@ -13,6 +13,41 @@ export default function KnowledgeBase() {
   const [question, setQuestion] = useState('');
   const [chatLog, setChatLog] = useState<{q: string, a: string}[]>([]);
 
+  const handleLocalUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setSelectedFile({ id: 'local', name: file.name, mimeType: file.type });
+    setLoading(true);
+    setContext('');
+    setChatLog([]);
+    
+    try {
+      if (file.type === 'application/pdf') {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let text = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          const strings = content.items.map((item: any) => item.str);
+          text += strings.join(' ') + '\n';
+        }
+        setContext(text);
+      } else if (file.type.includes('text')) {
+        const text = await file.text();
+        setContext(text);
+      } else {
+        alert("Formato no soportado. Solo PDF o TXT.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error extrayendo texto del archivo local.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadFiles();
   }, []);
@@ -76,6 +111,15 @@ export default function KnowledgeBase() {
     <div className="flex h-full gap-6">
       <div className="w-1/3 bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg flex flex-col h-[calc(100vh-6rem)]">
         <h3 className="text-xl font-bold mb-4 text-slate-200">Drive Repository</h3>
+        
+        {/* LOCAL UPLOAD BUTTON */}
+        <div className="mb-4">
+          <label className="flex items-center justify-center w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg cursor-pointer transition-colors font-medium text-sm">
+            <span>Subir PDF Local</span>
+            <input type="file" className="hidden" accept=".pdf,.txt" onChange={handleLocalUpload} />
+          </label>
+        </div>
+
         <ul className="flex-1 overflow-auto divide-y divide-slate-700">
           {files.map(f => (
             <li key={f.id} 
