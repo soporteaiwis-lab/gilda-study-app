@@ -3,7 +3,9 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { fetchDriveFiles, fetchFileContent } from '../services/driveService';
 import { askGemini } from '../services/geminiService';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+import workerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
 export default function KnowledgeBase() {
   const [files, setFiles] = useState<any[]>([]);
@@ -40,9 +42,9 @@ export default function KnowledgeBase() {
       } else {
         alert("Formato no soportado. Solo PDF o TXT.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Error extrayendo texto del archivo local.");
+      alert("Error extrayendo texto del archivo local: " + (err.message || "Error desconocido"));
     } finally {
       setLoading(false);
     }
