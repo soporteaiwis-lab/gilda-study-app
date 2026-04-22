@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FolderOpen, File, FileText, Image, Music, Video, ExternalLink, RefreshCw, Upload, ArrowLeft, Loader2 } from 'lucide-react';
+import { FolderOpen, File, FileText, Image, Music, Video, ExternalLink, RefreshCw, Upload, ArrowLeft, Loader2, Brain, Sparkles } from 'lucide-react';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
+import { toast } from 'sonner';
 
 const DRIVE_FOLDER_ID = import.meta.env.VITE_DRIVE_FOLDER_ID || '1HmB4SVm7WraN-4ELBxaEm3RcTjZ9t8Vq';
 const DRIVE_URL = `https://drive.google.com/drive/folders/${DRIVE_FOLDER_ID}`;
@@ -99,6 +102,46 @@ export const Materials = () => {
     }
   };
 
+  const importToKnowledge = async (file: DriveFile) => {
+    if (file.mimeType.includes('folder')) return;
+    const toastId = toast.loading(`Importando ${file.name}...`);
+    
+    try {
+      // 1. Create source entry in Firestore
+      const sourceRef = await addDoc(collection(db, 'sources'), {
+        name: file.name,
+        type: file.mimeType,
+        content: '',
+        status: 'processing',
+        selected: true,
+        createdAt: new Date().toISOString(),
+      });
+
+      // 2. We can't fetch the content directly from client due to CORS on webContentLink
+      // but we can pass the link to our serverless function if it's public or has key
+      // For now, we'll suggest the user to use the "Conocimiento" upload for local files
+      // but I'll try to use the drive API on server side to fetch content
+      
+      toast.info('Archivo enlazado. Iniciando digitalización...', { id: toastId });
+      
+      // Call a specialized server action or just let the user know they should download and upload
+      // if CORS is an issue.
+      // Better yet: try to fetch it via our proxy api
+      const fetchRes = await fetch(`/api/transcribe-drive?fileId=${file.id}`);
+      if (!fetchRes.ok) throw new Error('Error al obtener contenido del archivo');
+      const data = await fetchRes.json();
+      
+      await updateDoc(doc(db, 'sources', sourceRef.id), {
+        content: data.text,
+        status: 'ready'
+      });
+
+      toast.success(`${file.name} digitalizado en Conocimiento`, { id: toastId });
+    } catch (err: any) {
+      toast.error(`Error al importar: ${err.message}`, { id: toastId });
+    }
+  };
+
   return (
     <div className="space-y-5 max-w-6xl mx-auto">
       {/* Header */}
@@ -185,9 +228,14 @@ export const Materials = () => {
                   {isFolder ? (
                     <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-400 bg-amber-500/10">Carpeta</Badge>
                   ) : (
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-500 hover:text-white" onClick={(e) => { e.stopPropagation(); window.open(file.webViewLink, '_blank'); }}>
-                      <ExternalLink className="w-4 h-4" />
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" title="Importar a Conocimiento" className="h-8 w-8 text-amber-400 hover:text-white" onClick={(e) => { e.stopPropagation(); importToKnowledge(file); }}>
+                        <Brain className="w-4 h-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-500 hover:text-white" onClick={(e) => { e.stopPropagation(); window.open(file.webViewLink, '_blank'); }}>
+                        <ExternalLink className="w-4 h-4" />
+                      </Button>
+                    </div>
                   )}
                 </div>
               );

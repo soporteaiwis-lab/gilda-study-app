@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
   Brain, Send, Upload, FileText, Trash2, Loader2,
   BookOpen, Download, Eye, FileAudio, FileVideo,
-  Image as ImageIcon, RefreshCw, X
+  Image as ImageIcon, RefreshCw, X, Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -133,6 +133,40 @@ export const NotebookPage = () => {
     await updateDoc(doc(db, 'sources', id), { selected: !current });
   };
 
+  const summarizeSource = async (source: Source) => {
+    if (loading || !source.content) {
+      toast.error('Digitaliza el archivo primero para poder resumirlo.');
+      return;
+    }
+    setLoading(true);
+    setMessages(prev => [...prev, { role: 'user', content: `Resume el contenido de: ${source.name}` }]);
+    
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `Haz un resumen exhaustivo y estructurado del siguiente texto de estudio. Usa viñetas y negritas para resaltar conceptos clave: \n\n${source.content}`,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Error al resumir');
+      const data = await res.json();
+      setMessages(prev => [...prev, { role: 'assistant', content: data.text }]);
+      toast.success('Resumen generado');
+    } catch (err: any) {
+      toast.error('Error al generar resumen');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const retryDigitalization = async (source: Source) => {
+    // We need the original file object, but we don't have it here. 
+    // Usually the user should re-upload, but we can give a better error message.
+    toast.info('Para re-intentar, por favor vuelve a subir el archivo.');
+  };
+
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
     const userMsg: Message = { role: 'user', content: input };
@@ -226,10 +260,13 @@ export const NotebookPage = () => {
                 </div>
 
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button size="icon" variant="ghost" className="h-7 w-7 text-slate-400 hover:text-white" onClick={() => setPreviewSource(s)}>
+                  <Button size="icon" variant="ghost" title="Resumir" className="h-7 w-7 text-amber-400 hover:text-white" onClick={() => summarizeSource(s)}>
+                    <Sparkles className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button size="icon" variant="ghost" title="Ver Contenido" className="h-7 w-7 text-slate-400 hover:text-white" onClick={() => setPreviewSource(s)}>
                     <Eye className="w-3.5 h-3.5" />
                   </Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 text-slate-400 hover:text-red-400" onClick={() => removeSource(s.id)}>
+                  <Button size="icon" variant="ghost" title="Eliminar" className="h-7 w-7 text-slate-400 hover:text-red-400" onClick={() => removeSource(s.id)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
