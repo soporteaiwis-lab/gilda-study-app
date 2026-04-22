@@ -17,7 +17,7 @@ export default async function handler(req: any, res: any) {
     if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY no configurada en el servidor' });
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const systemPrompt = `Eres un asistente de estudio especializado en Administración de Empresas.
 CONTEXTO: Estudiante Gilda Cuvertino, Ing. en Administración de Empresas, modalidad online.
