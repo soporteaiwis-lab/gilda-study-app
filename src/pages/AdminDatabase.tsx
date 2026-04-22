@@ -58,7 +58,7 @@ export const AdminDatabase = () => {
   const [editData, setEditData] = useState<TableRow | null>(null);
 
   // Only admin can access
-  if (user?.role !== 'admin') {
+  if (user.role !== 'admin') {
     return <Navigate to="/" />;
   }
 

@@ -11,20 +11,19 @@ const statusConfig = {
   pending: { label: 'Pendiente', color: '#64748b', bg: 'rgba(100,116,139,0.15)' },
 };
 
-const yearColors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b'];
+const yearColors = ['#3b82f6', '#8b5cf6'];
 
 export const Curriculum = () => {
   const [subjects, setSubjects] = useState<Subject[]>(() => {
-    const saved = localStorage.getItem('estudia_curriculum_v2');
+    const saved = localStorage.getItem('estudia_curriculum_v3');
     return saved ? JSON.parse(saved) : defaultSubjects;
   });
   const [pdfUrl, setPdfUrl] = useState<string | null>(() => localStorage.getItem('estudia_curriculum_pdf'));
-  const [, setPdfName] = useState(() => localStorage.getItem('estudia_curriculum_pdf_name') || '');
   const [showPdf, setShowPdf] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const save = (s: Subject[]) => { setSubjects(s); localStorage.setItem('estudia_curriculum_v2', JSON.stringify(s)); };
+  const save = (s: Subject[]) => { setSubjects(s); localStorage.setItem('estudia_curriculum_v3', JSON.stringify(s)); };
 
   const cycleStatus = (id: string) => {
     const order: Subject['status'][] = ['pending', 'in-progress', 'completed'];
@@ -35,20 +34,19 @@ export const Curriculum = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => { const url = reader.result as string; setPdfUrl(url); setPdfName(file.name); localStorage.setItem('estudia_curriculum_pdf', url); localStorage.setItem('estudia_curriculum_pdf_name', file.name); };
+    reader.onload = () => { const url = reader.result as string; setPdfUrl(url); localStorage.setItem('estudia_curriculum_pdf', url); };
     reader.readAsDataURL(file);
   };
 
-  const removePdf = () => { setPdfUrl(null); setPdfName(''); localStorage.removeItem('estudia_curriculum_pdf'); localStorage.removeItem('estudia_curriculum_pdf_name'); setShowPdf(false); };
+  const removePdf = () => { setPdfUrl(null); localStorage.removeItem('estudia_curriculum_pdf'); setShowPdf(false); };
 
   const completed = subjects.filter(s => s.status === 'completed').length;
   const inProgress = subjects.filter(s => s.status === 'in-progress').length;
-  const years = [1, 2, 3, 4];
   const filteredSubjects = selectedYear ? subjects.filter(s => s.year === selectedYear) : subjects;
   const bimestres = [...new Set(filteredSubjects.map(s => s.bimestre))].sort((a, b) => a - b);
 
   return (
-    <div className="space-y-5 max-w-6xl mx-auto">
+    <div className="space-y-5 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -57,7 +55,7 @@ export const Curriculum = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold text-white">Malla Curricular</h1>
-            <p className="text-xs text-slate-500">Ingeniero en Administración de Empresas · 4 años · Online</p>
+            <p className="text-xs text-slate-500">Ing. en Administración de Empresas · 2 años · 10 Bimestres</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -76,7 +74,6 @@ export const Curriculum = () => {
         </div>
       </div>
 
-      {/* PDF Viewer */}
       {showPdf && pdfUrl && (
         <Card className="border-0 overflow-hidden" style={{ background: 'rgba(30,41,59,0.6)', border: '1px solid rgba(148,163,184,0.1)' }}>
           <iframe src={pdfUrl} className="w-full border-0" style={{ height: '700px' }} title="Malla PDF" />
@@ -111,7 +108,7 @@ export const Curriculum = () => {
               <span className="text-xs text-blue-400 font-medium">{completed}/{subjects.length}</span>
             </div>
             <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full rounded-full" style={{ width: `${subjects.length > 0 ? (completed / subjects.length) * 100 : 0}%`, background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', transition: 'width 0.5s' }} />
+              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${subjects.length > 0 ? (completed / subjects.length) * 100 : 0}%`, background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }} />
             </div>
           </Card>
 
@@ -120,7 +117,7 @@ export const Curriculum = () => {
             <Button size="sm" variant={selectedYear === null ? 'default' : 'outline'} className={selectedYear === null ? '' : 'border-slate-700 text-slate-400'} onClick={() => setSelectedYear(null)}>
               Todos
             </Button>
-            {years.map(y => (
+            {[1, 2].map(y => (
               <Button key={y} size="sm" variant={selectedYear === y ? 'default' : 'outline'}
                 className={selectedYear === y ? '' : 'border-slate-700 text-slate-400'}
                 style={selectedYear === y ? { background: yearColors[y - 1] } : {}}
@@ -129,16 +126,6 @@ export const Curriculum = () => {
               </Button>
             ))}
           </div>
-
-          {/* Salida Intermedia note */}
-          {(selectedYear === null || selectedYear <= 2) && (
-            <Card className="p-3 border-0" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
-              <p className="text-xs text-emerald-400">
-                <Award className="w-3 h-3 inline mr-1" />
-                <strong>Salida Intermedia:</strong> Técnico en Administración de Empresas (Bimestres 1-10 + Práctica Profesional)
-              </p>
-            </Card>
-          )}
 
           {/* Bimestres */}
           {bimestres.map(bim => {
@@ -153,7 +140,6 @@ export const Curriculum = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {bimSubjects.map(subject => {
                     const cfg = statusConfig[subject.status];
-                    const dip = subject.diplomado ? diplomados.find(d => d.id === subject.diplomado) : null;
                     return (
                       <Card key={subject.id} className="p-3 border-0 cursor-pointer transition-all hover:scale-[1.01]"
                         style={{ background: 'rgba(30,41,59,0.6)', border: `1px solid ${subject.examOnline ? 'rgba(16,185,129,0.4)' : 'rgba(148,163,184,0.1)'}` }}
@@ -165,7 +151,7 @@ export const Curriculum = () => {
                           </Badge>
                         </div>
                         <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                          {dip && <span className="truncate">Módulo {subject.diplomado}</span>}
+                          {subject.diplomado && <span>Módulo {subject.diplomado}</span>}
                           {subject.examOnline && <span className="text-emerald-400">● Examen online</span>}
                         </div>
                       </Card>
@@ -181,21 +167,19 @@ export const Curriculum = () => {
             <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
               <Award className="w-4 h-4 text-purple-400" /> Módulos Formativos (Diplomados)
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {diplomados.map(d => (
                 <div key={d.id} className="flex items-center gap-2 text-xs">
-                  <span className="w-5 h-5 rounded flex items-center justify-center text-white font-bold" style={{ background: yearColors[Math.min(Math.floor((d.id - 1) / 2.5), 3)], fontSize: '10px' }}>{d.id}</span>
-                  <span className="text-slate-400 truncate">{d.name}</span>
+                  <span className="w-5 h-5 rounded flex items-center justify-center text-white font-bold" style={{ background: d.id <= 7 ? yearColors[0] : yearColors[1], fontSize: '10px' }}>{d.id}</span>
+                  <span className="text-slate-400">{d.name}</span>
                 </div>
               ))}
             </div>
           </Card>
 
-          {/* Footer info */}
           <p className="text-[11px] text-slate-600 text-center">
-            Título: Ingeniero en Administración de Empresas | Salida Intermedia: Técnico en Administración de Empresas | Nivel: Profesional | Modalidad: Online | Duración: 4 años
+            Haz clic en cualquier materia para cambiar su estado (Pendiente → En Curso → Aprobada)
           </p>
-          <p className="text-[11px] text-slate-600 text-center">Haz clic en cualquier materia para cambiar su estado (Pendiente → En Curso → Aprobada)</p>
         </>
       )}
     </div>

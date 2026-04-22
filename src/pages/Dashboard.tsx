@@ -1,6 +1,6 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
-import { MessageSquare, FolderOpen, CheckSquare, Notebook, Sparkles, BookOpen } from 'lucide-react';
+import { MessageSquare, CheckSquare, Sparkles, BookOpen, Brain } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const Dashboard = () => {
@@ -8,26 +8,25 @@ export const Dashboard = () => {
 
   const quickActions = [
     { icon: MessageSquare, label: 'Chat IA', desc: 'Pregunta sobre tus materias', path: '/chat', color: '#3b82f6' },
-    { icon: FolderOpen, label: 'Google Drive', desc: 'Documentos de estudio', path: '/materials', color: '#10b981' },
-    { icon: Notebook, label: 'NotebookLM', desc: 'Cuaderno IA de Google', path: '/notebook', color: '#f59e0b' },
+    { icon: Brain, label: 'Conocimiento', desc: 'Base de conocimiento con IA', path: '/notebook', color: '#f59e0b' },
     { icon: BookOpen, label: 'Currículo', desc: 'Malla curricular oficial', path: '/curriculum', color: '#8b5cf6' },
     { icon: CheckSquare, label: 'Tareas', desc: 'Gestión de actividades', path: '/tasks', color: '#ec4899' },
   ];
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-6 max-w-5xl mx-auto">
       <div className="rounded-2xl p-6 lg:p-8" style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(139,92,246,0.15))', border: '1px solid rgba(59,130,246,0.2)' }}>
         <div className="flex items-center gap-2 mb-2">
           <Sparkles className="w-5 h-5 text-blue-400" />
           <span className="text-blue-400 text-sm font-medium">Bienvenida</span>
         </div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-white mb-1">Hola, {user?.displayName?.split(' ')[0] || 'Estudiante'} 👋</h1>
+        <h1 className="text-2xl lg:text-3xl font-bold text-white mb-1">Hola, {user.displayName.split(' ')[0]} 👋</h1>
         <p className="text-slate-400">Tu plataforma de estudio inteligente para Administración de Empresas.</p>
       </div>
 
       <div>
         <h2 className="text-lg font-semibold text-white mb-4">Acceso Rápido</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {quickActions.map(a => (
             <Link key={a.path} to={a.path}>
               <Card className="p-5 border-0 cursor-pointer transition-all duration-200 hover:scale-[1.02] group" style={{ background: 'rgba(30,41,59,0.6)', border: '1px solid rgba(148,163,184,0.1)' }}>
