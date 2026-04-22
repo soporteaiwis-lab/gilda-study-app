@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import * as pdfParse from 'pdf-parse';
+import pdfParse from 'pdf-parse';
 import * as mammoth from 'mammoth';
 
 export default async function handler(req: any, res: any) {
@@ -20,7 +20,7 @@ export default async function handler(req: any, res: any) {
     // FAST PATH: Direct text extraction for documents
     if (mimeType === 'application/pdf') {
       try {
-        const data = await pdfParse.default(buffer);
+        const data = await pdfParse(buffer);
         text = data.text;
         if (text.trim()) return res.status(200).json({ text: text.trim() });
       } catch (err) {

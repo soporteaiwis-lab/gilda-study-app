@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import * as pdfParse from 'pdf-parse';
+import pdfParse from 'pdf-parse';
 import * as mammoth from 'mammoth';
 
 export default async function handler(req: any, res: any) {
@@ -38,7 +38,7 @@ export default async function handler(req: any, res: any) {
       // FAST PATH: Direct text extraction
       if (mimeType === 'application/pdf') {
         try {
-          const data = await pdfParse.default(buffer);
+          const data = await pdfParse(buffer);
           textContent = data.text;
         } catch (err) {
           console.warn('Fast PDF parse failed, falling back to Gemini:', err);
