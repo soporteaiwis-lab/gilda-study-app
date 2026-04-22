@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+// @ts-ignore
 import pdfParse from 'pdf-parse';
 import * as mammoth from 'mammoth';
 
