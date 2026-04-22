@@ -13,7 +13,7 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    const genAI = new GoogleGenerativeAI(process.env.VITE_GEMINI_API_KEY || '');
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '');
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const systemPrompt = `
