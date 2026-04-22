@@ -4,7 +4,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
   LayoutDashboard,
-  MessageSquare,
   BookOpen,
   CheckSquare,
   Settings,
@@ -12,7 +11,9 @@ import {
   Database,
   Brain,
   Shield,
-  User
+  User,
+  ExternalLink,
+  FolderOpen
 } from 'lucide-react';
 
 export const Layout = () => {
@@ -22,7 +23,6 @@ export const Layout = () => {
 
   const navItems = [
     { icon: LayoutDashboard, label: 'Inicio', path: '/' },
-    { icon: MessageSquare, label: 'Chat IA', path: '/chat' },
     { icon: Brain, label: 'Conocimiento', path: '/notebook' },
     { icon: BookOpen, label: 'Currículo', path: '/curriculum' },
     { icon: CheckSquare, label: 'Tareas', path: '/tasks' },
@@ -32,6 +32,12 @@ export const Layout = () => {
   if (isAdmin) {
     navItems.push({ icon: Database, label: 'Base de Datos', path: '/admin/database' });
   }
+
+  const externalLinks = [
+    { icon: Brain, label: 'NotebookLM Oficial', url: 'https://notebooklm.google.com/notebook/536ab9bb-432f-4a27-9565-cf9b1baabe48' },
+    { icon: FolderOpen, label: 'Drive Compartido', url: 'https://drive.google.com/drive/folders/1HmB4SVm7WraN-4ELBxaEm3RcTjZ9t8Vq?usp=sharing' },
+    { icon: ExternalLink, label: 'Portal IPLACEX', url: 'https://www.iplacex.cl' },
+  ];
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
@@ -44,7 +50,7 @@ export const Layout = () => {
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {/* Sidebar */}
-      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-52 z-50 flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-56 z-50 flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
         style={{ background: 'rgba(15, 23, 42, 0.95)', borderRight: '1px solid rgba(148, 163, 184, 0.1)' }}>
 
         {/* Logo */}
@@ -54,23 +60,37 @@ export const Layout = () => {
           </div>
           <div>
             <h1 className="text-white font-bold text-sm">Estud-IA</h1>
-            <p className="text-slate-500 text-[10px]">v1.0</p>
+            <p className="text-slate-500 text-[10px]">v2.0 · RAG Edition</p>
           </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-2 py-2 space-y-0.5">
-          {navItems.map(item => {
-            const active = isActive(item.path);
-            return (
-              <Link key={item.path} to={item.path} onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${active ? 'text-white font-medium' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
-                style={active ? { background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(139,92,246,0.2))', boxShadow: 'inset 0 0 0 1px rgba(59,130,246,0.3)' } : {}}>
-                <item.icon className="w-4 h-4" />
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
+          <div className="mb-4">
+            <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Principal</p>
+            {navItems.map(item => {
+              const active = isActive(item.path);
+              return (
+                <Link key={item.path} to={item.path} onClick={() => setSidebarOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${active ? 'text-white font-medium' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                  style={active ? { background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(139,92,246,0.2))', boxShadow: 'inset 0 0 0 1px rgba(59,130,246,0.3)' } : {}}>
+                  <item.icon className="w-4 h-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+
+          <div>
+            <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Herramientas Externas</p>
+            {externalLinks.map(link => (
+              <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:text-blue-400 hover:bg-blue-400/5 transition-all">
+                <link.icon className="w-4 h-4" />
+                {link.label}
+              </a>
+            ))}
+          </div>
         </nav>
 
         {/* User */}
@@ -86,7 +106,7 @@ export const Layout = () => {
           </div>
           <Button variant="ghost" size="sm" className="w-full text-xs text-slate-400 hover:text-white justify-start h-7"
             onClick={isAdmin ? switchToGilda : switchToAdmin}>
-            {isAdmin ? <><User className="w-3 h-3 mr-1" /> Cambiar a Gilda</> : <><Shield className="w-3 h-3 mr-1" /> Modo Admin</>}
+            {isAdmin ? <><User className="w-3 h-3 mr-1" /> Modo Gilda</> : <><Shield className="w-3 h-3 mr-1" /> Modo Admin</>}
           </Button>
         </div>
       </aside>
@@ -107,7 +127,7 @@ export const Layout = () => {
 
         {/* Footer */}
         <footer className="text-center py-2 text-[10px] text-slate-600 border-t border-slate-800/30">
-          App Estud-IA v1.0 | Desarrollado por Armin Salazar - AIWIS IA & TI | Para Gilda Cuvertino
+          App Estud-IA v2.0 | Desarrollado por Armin Salazar - AIWIS IA & TI | Para Gilda Cuvertino
         </footer>
       </main>
     </div>

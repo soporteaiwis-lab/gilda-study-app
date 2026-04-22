@@ -1,9 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { db } from '@/lib/firebase';
+import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { GraduationCap, CheckCircle2, Clock, Upload, FileText, Trash2, BookOpen, Award } from 'lucide-react';
+import { GraduationCap, CheckCircle2, Clock, Upload, FileText, Trash2, BookOpen, Award, Loader2 } from 'lucide-react';
 import { defaultSubjects, diplomados, type Subject } from '@/data/curriculum';
+import { toast } from 'sonner';
 
 const statusConfig = {
   completed: { label: 'Aprobada', color: '#10b981', bg: 'rgba(16,185,129,0.15)' },
@@ -14,36 +17,75 @@ const statusConfig = {
 const yearColors = ['#3b82f6', '#8b5cf6'];
 
 export const Curriculum = () => {
-  const [subjects, setSubjects] = useState<Subject[]>(() => {
-    const saved = localStorage.getItem('estudia_curriculum_v3');
-    return saved ? JSON.parse(saved) : defaultSubjects;
-  });
-  const [pdfUrl, setPdfUrl] = useState<string | null>(() => localStorage.getItem('estudia_curriculum_pdf'));
+  const [subjects, setSubjects] = useState<Subject[]>(defaultSubjects);
+  const [loading, setLoading] = useState(true);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [showPdf, setShowPdf] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const save = (s: Subject[]) => { setSubjects(s); localStorage.setItem('estudia_curriculum_v3', JSON.stringify(s)); };
+  // Firestore Sync
+  useEffect(() => {
+    const docRef = doc(db, 'curriculum', 'gilda-main');
+    const unsubscribe = onSnapshot(docRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.subjects) setSubjects(data.subjects);
+        if (data.pdfUrl) setPdfUrl(data.pdfUrl);
+      } else {
+        // Initialize if not exists
+        setDoc(docRef, { subjects: defaultSubjects, pdfUrl: null });
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const saveToFirestore = async (newSubjects: Subject[], newPdfUrl: string | null = pdfUrl) => {
+    try {
+      await setDoc(doc(db, 'curriculum', 'gilda-main'), {
+        subjects: newSubjects,
+        pdfUrl: newPdfUrl
+      });
+    } catch (err) {
+      toast.error('Error al sincronizar con la nube');
+    }
+  };
 
   const cycleStatus = (id: string) => {
     const order: Subject['status'][] = ['pending', 'in-progress', 'completed'];
-    save(subjects.map(s => s.id === id ? { ...s, status: order[(order.indexOf(s.status) + 1) % 3] } : s));
+    const updated = subjects.map(s => s.id === id ? { ...s, status: order[(order.indexOf(s.status) + 1) % 3] } : s);
+    setSubjects(updated);
+    saveToFirestore(updated);
   };
 
   const handlePdf = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => { const url = reader.result as string; setPdfUrl(url); localStorage.setItem('estudia_curriculum_pdf', url); };
+    reader.onload = () => {
+      const url = reader.result as string;
+      setPdfUrl(url);
+      saveToFirestore(subjects, url);
+      toast.success('PDF guardado en la nube');
+    };
     reader.readAsDataURL(file);
   };
 
-  const removePdf = () => { setPdfUrl(null); localStorage.removeItem('estudia_curriculum_pdf'); setShowPdf(false); };
+  const removePdf = () => {
+    setPdfUrl(null);
+    saveToFirestore(subjects, null);
+    setShowPdf(false);
+  };
 
   const completed = subjects.filter(s => s.status === 'completed').length;
   const inProgress = subjects.filter(s => s.status === 'in-progress').length;
   const filteredSubjects = selectedYear ? subjects.filter(s => s.year === selectedYear) : subjects;
   const bimestres = [...new Set(filteredSubjects.map(s => s.bimestre))].sort((a, b) => a - b);
+
+  if (loading) {
+    return <div className="h-[70vh] flex items-center justify-center"><Loader2 className="w-8 h-8 text-purple-500 animate-spin" /></div>;
+  }
 
   return (
     <div className="space-y-5 max-w-5xl mx-auto">
@@ -162,23 +204,8 @@ export const Curriculum = () => {
             );
           })}
 
-          {/* Diplomados */}
-          <Card className="p-4 border-0" style={{ background: 'rgba(30,41,59,0.6)', border: '1px solid rgba(148,163,184,0.1)' }}>
-            <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-              <Award className="w-4 h-4 text-purple-400" /> Módulos Formativos (Diplomados)
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {diplomados.map(d => (
-                <div key={d.id} className="flex items-center gap-2 text-xs">
-                  <span className="w-5 h-5 rounded flex items-center justify-center text-white font-bold" style={{ background: d.id <= 7 ? yearColors[0] : yearColors[1], fontSize: '10px' }}>{d.id}</span>
-                  <span className="text-slate-400">{d.name}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <p className="text-[11px] text-slate-600 text-center">
-            Haz clic en cualquier materia para cambiar su estado (Pendiente → En Curso → Aprobada)
+          <p className="text-[11px] text-slate-600 text-center py-4">
+            Los cambios se guardan automáticamente en tu cuenta.
           </p>
         </>
       )}
